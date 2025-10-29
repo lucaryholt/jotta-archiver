@@ -1,1 +1,205 @@
-# jotta-archiver
+# Jotta Archiver
+
+A terminal user interface (TUI) tool for archiving folders using jotta-cli with configurable presets and progress monitoring.
+
+## Features
+
+- 📦 **Interactive TUI** - Built with [Bubble Tea](https://github.com/charmbracelet/bubbletea) for a smooth terminal experience
+- ⚙️ **Configurable Presets** - Define multiple archive destinations in a YAML config file
+- 🔧 **Custom Remote Paths** - Enter custom remote directories on-the-fly without editing config
+- 🎲 **Auto-generated Names** - Archives are automatically named with format `YYYYMMDD_random_word_combo`
+- ✏️ **Editable Names** - Customize the archive name before uploading
+- 📊 **Progress Monitoring** - Seamlessly launches jotta-cli's built-in observe TUI
+- 🔄 **Background Upload** - Exit the observer and uploads continue in the background
+- 🐛 **Debug Mode** - Toggle debug mode to see jotta-cli commands and output
+
+## Prerequisites
+
+- [jotta-cli](https://docs.jottacloud.com/en/articles/1437201-jotta-cli-documentation) must be installed and configured
+- Go 1.21 or later (for building from source)
+
+## Installation
+
+### Build from Source
+
+```bash
+git clone https://github.com/luca/jotta-archiver.git
+cd jotta-archiver
+go build -o jotta-archiver
+sudo mv jotta-archiver /usr/local/bin/  # Optional: install globally
+```
+
+### Verify jotta-cli Installation
+
+```bash
+jotta-cli --version
+```
+
+## Configuration
+
+On first run, a default configuration file will be created at `~/.jotta-archiver.yaml`:
+
+```yaml
+presets:
+  - name: "Camera Pictures"
+    remote: "/media/pictures/camera_pictures"
+  - name: "Documents"
+    remote: "/media/documents"
+  - name: "Music"
+    remote: "/media/music/archives"
+```
+
+### Config File Format
+
+Edit `~/.jotta-archiver.yaml` to add your own presets:
+
+```yaml
+presets:
+  - name: "Your Preset Name"
+    remote: "/your/remote/path"
+  - name: "Another Preset"
+    remote: "/another/remote/path"
+```
+
+Each preset requires:
+- `name`: A descriptive name shown in the TUI
+- `remote`: The remote path on Jottacloud where archives will be stored
+
+## Usage
+
+```bash
+jotta-archiver <folder>
+```
+
+### Example
+
+```bash
+jotta-archiver ~/Pictures/vacation_2025
+```
+
+### Interactive Flow
+
+1. **Select Preset**: Use arrow keys (↑/↓) to navigate presets, or select "Custom..." for manual remote path entry, press Enter to select
+2. **Custom Remote** (if selected): Enter a custom remote directory path
+3. **Edit Archive Name**: Modify the auto-generated name if desired, press Enter to start upload
+4. **Monitor Progress**: Automatically launches `jotta-cli observe` which provides a real-time TUI for monitoring upload progress
+5. **Debug Mode**: Press 'd' to toggle debug mode and see command output before starting upload
+
+### Keyboard Controls
+
+#### Preset Selection Screen
+- `↑` / `k` - Move up
+- `↓` / `j` - Move down
+- `Enter` - Select preset or custom option
+- `d` - Toggle debug mode
+- `q` / `Ctrl+C` - Quit
+
+#### Custom Remote Screen
+- Type to enter custom remote path
+- `Enter` - Continue to name editing
+- `Esc` - Go back to preset selection
+- `Ctrl+C` - Quit
+
+#### Name Editing Screen
+- Type to edit the archive name
+- `Enter` - Start upload (launches jotta-cli observe)
+- `Esc` - Go back to previous screen
+- `d` - Toggle debug mode
+- `Ctrl+C` - Quit
+
+## How It Works
+
+1. **Archive Name Generation**: Creates a unique name using the format `YYYYMMDD_word1_word2_word3` (e.g., `20251029_swift_mountain_river`)
+
+2. **Archive Command**: Executes:
+   ```bash
+   jotta-cli archive <folder> --remote=<remote_path>/<archive_name>
+   ```
+   Captures the upload ID from the output
+
+3. **Progress Monitoring**: Automatically launches jotta-cli's built-in observer:
+   ```bash
+   jotta-cli observe --uploadid=<upload_id>
+   ```
+   This provides a real-time TUI showing upload progress, speed, and status
+
+4. **Debug Mode**: When enabled (press 'd'), displays:
+   - Commands being executed
+   - Raw output from jotta-cli archive
+   - Upload ID that was captured
+   - Useful for troubleshooting upload issues
+
+## Development
+
+### Project Structure
+
+```
+jotta-archiver/
+├── main.go                 # Entry point and CLI parsing
+├── config/
+│   └── config.go          # YAML config loading
+├── wordgen/
+│   └── wordgen.go         # Random archive name generation
+├── archive/
+│   └── archive.go         # Jotta-cli command execution
+├── tui/
+│   └── tui.go             # Bubble Tea TUI implementation
+└── go.mod                 # Go dependencies
+```
+
+### Dependencies
+
+- [charmbracelet/bubbletea](https://github.com/charmbracelet/bubbletea) - TUI framework
+- [charmbracelet/bubbles](https://github.com/charmbracelet/bubbles) - TUI components
+- [charmbracelet/lipgloss](https://github.com/charmbracelet/lipgloss) - Terminal styling
+- [gopkg.in/yaml.v3](https://gopkg.in/yaml.v3) - YAML parsing
+
+### Building
+
+```bash
+go build -o jotta-archiver
+```
+
+### Running Tests
+
+```bash
+go test ./...
+```
+
+## Troubleshooting
+
+### "jotta-cli not found"
+Ensure jotta-cli is installed and in your PATH:
+```bash
+which jotta-cli
+```
+
+### "failed to load config"
+Check that `~/.jotta-archiver.yaml` exists and is valid YAML. The tool will create a default config on first run if none exists.
+
+### "folder does not exist"
+Verify the folder path is correct. Use absolute paths if relative paths aren't working:
+```bash
+jotta-archiver /full/path/to/folder
+```
+
+### Upload not starting
+If the upload doesn't start after pressing Enter:
+- Check that jotta-cli is properly configured (`jotta-cli status`)
+- Verify the remote path exists or has proper permissions
+- Enable debug mode (`d` key) to see the exact commands and errors
+
+### Debugging upload issues
+Press `d` to toggle debug mode before starting upload to see:
+- The exact jotta-cli archive command being executed
+- Raw output from jotta-cli including the upload ID
+- Any error messages from the command
+- Useful for diagnosing path or permission issues
+
+## License
+
+MIT License - feel free to use and modify as needed.
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit issues or pull requests.
