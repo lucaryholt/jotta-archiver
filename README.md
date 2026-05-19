@@ -12,6 +12,7 @@ A terminal user interface (TUI) tool for archiving folders using jotta-cli with 
 - 📊 **Progress Monitoring** - Seamlessly launches jotta-cli's built-in observe TUI
 - 🔄 **Background Upload** - Exit the observer and uploads continue in the background
 - 🐛 **Debug Mode** - Toggle debug mode to see jotta-cli commands and output
+- 🖱️ **macOS Finder Integration** - Right-click folders in Finder to launch archiver (Quick Action)
 
 ## Prerequisites
 
@@ -33,6 +34,42 @@ sudo mv jotta-archiver /usr/local/bin/  # Optional: install globally
 
 ```bash
 jotta-cli --version
+```
+
+## macOS Finder Integration
+
+### Quick Action (Right-Click Menu)
+
+You can integrate jotta-archiver with macOS Finder to archive folders directly from the context menu.
+
+**Installation:**
+
+```bash
+cd jotta-archiver
+./install/install-finder-integration.sh
+```
+
+This will:
+- Create an Automator Quick Action workflow
+- Install it to `~/Library/Services/`
+- Install the binary to `/usr/local/bin/` or `~/.local/bin/`
+
+**Usage:**
+
+1. Right-click (or Control+click) on any folder in Finder
+2. Navigate to **Quick Actions** or **Services** in the context menu
+3. Click **Archive with Jotta**
+4. Terminal will open with jotta-archiver running for that folder
+5. Follow the TUI prompts to complete the archive
+
+**Note:** If the Quick Action doesn't appear immediately, you may need to log out and log back in, or run:
+```bash
+/System/Library/CoreServices/pbs -flush
+```
+
+**Uninstall:**
+```bash
+rm -rf ~/Library/Services/"Archive with Jotta.workflow"
 ```
 
 ## Configuration
