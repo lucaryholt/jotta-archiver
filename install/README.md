@@ -48,6 +48,8 @@ After installation:
 4. Select your preset and archive name
 5. Watch the upload progress
 
+Any features configured in `~/.jotta-archiver.yaml` — such as format subfolders (`split_by_format`) or extension renaming (`extension_renames`) — apply automatically when using the Finder Quick Action, exactly as they do from the command line.
+
 ## Troubleshooting
 
 ### Quick Action doesn't appear

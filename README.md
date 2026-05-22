@@ -9,6 +9,8 @@ A terminal user interface (TUI) tool for archiving folders using jotta-cli with 
 - 🔧 **Custom Remote Paths** - Enter custom remote directories on-the-fly without editing config
 - 🎲 **Auto-generated Names** - Archives are automatically named with format `YYYYMMDD_random_word_combo`
 - ✏️ **Editable Names** - Customize the archive name before uploading
+- 📁 **Format Subfolders** - Optionally split files into per-format subfolders (e.g. `JPEG/`, `HEIF/`) per preset
+- 🔀 **Extension Renaming** - Remap file extensions before upload (e.g. `.HIF` → `.HEIF`) without converting files
 - 📊 **Progress Monitoring** - Seamlessly launches jotta-cli's built-in observe TUI
 - 🔄 **Background Upload** - Exit the observer and uploads continue in the background
 - 🐛 **Debug Mode** - Toggle debug mode to see jotta-cli commands and output
@@ -80,10 +82,14 @@ On first run, a default configuration file will be created at `~/.jotta-archiver
 presets:
   - name: "Camera Pictures"
     remote: "/media/pictures/camera_pictures"
+    split_by_format: true
   - name: "Documents"
     remote: "/media/documents"
   - name: "Music"
     remote: "/media/music/archives"
+
+extension_renames:
+  HIF: HEIF
 ```
 
 ### Config File Format
@@ -94,13 +100,47 @@ Edit `~/.jotta-archiver.yaml` to add your own presets:
 presets:
   - name: "Your Preset Name"
     remote: "/your/remote/path"
+    split_by_format: true   # optional
   - name: "Another Preset"
     remote: "/another/remote/path"
+
+extension_renames:          # optional, global
+  HIF: HEIF
+  heic: heic
 ```
 
 Each preset requires:
 - `name`: A descriptive name shown in the TUI
 - `remote`: The remote path on Jottacloud where archives will be stored
+- `split_by_format` *(optional)*: When `true`, files are grouped into per-format subfolders at upload time (see below)
+
+### Format Subfolders (`split_by_format`)
+
+When a preset has `split_by_format: true`, files are organized into a subfolder named after their (uppercased) extension, inserted as the immediate parent of each file. The rest of the directory hierarchy is preserved:
+
+```
+Source folder:           Uploaded as:
+vacation/                vacation/
+  IMG_001.jpg              JPEG/
+  IMG_001.HIF     →          IMG_001.jpg
+  clip.mp4               HEIF/
+                             IMG_001.HEIF   ← renamed from .HIF
+                         MP4/
+                             clip.mp4
+```
+
+No files are copied or converted — hard links are used so preprocessing is near-instantaneous. The original folder is never modified.
+
+### Extension Renaming (`extension_renames`)
+
+The global `extension_renames` map renames file extensions before upload without converting the file content. Keys are matched case-insensitively:
+
+```yaml
+extension_renames:
+  HIF: HEIF     # .HIF, .hif, .Hif → .HEIF
+```
+
+This is useful for formats where the extension varies but the container is the same (e.g. Apple's `.HIF` files are HEIF images and some software expects the `.HEIF` extension).
 
 ## Usage
 
@@ -148,19 +188,23 @@ jotta-archiver ~/Pictures/vacation_2025
 
 1. **Archive Name Generation**: Creates a unique name using the format `YYYYMMDD_word1_word2_word3` (e.g., `20251029_swift_mountain_river`)
 
-2. **Archive Command**: Executes:
+2. **Preprocessing** *(if enabled)*: Before uploading, a temporary directory is built using hard links (zero-copy) with files reorganized into format subfolders and/or with extensions renamed according to config. The original folder is never modified.
+
+3. **Archive Command**: Executes:
    ```bash
    jotta-cli archive <folder> --remote=<remote_path>/<archive_name>
    ```
    Captures the upload ID from the output
 
-3. **Progress Monitoring**: Automatically launches jotta-cli's built-in observer:
+4. **Progress Monitoring**: Automatically launches jotta-cli's built-in observer:
    ```bash
    jotta-cli observe --uploadid=<upload_id>
    ```
    This provides a real-time TUI showing upload progress, speed, and status
 
-4. **Debug Mode**: When enabled (press 'd'), displays:
+5. **Cleanup**: The temporary preprocessing directory is removed after the upload completes.
+
+6. **Debug Mode**: When enabled (press 'd'), displays:
    - Commands being executed
    - Raw output from jotta-cli archive
    - Upload ID that was captured
@@ -172,11 +216,13 @@ jotta-archiver ~/Pictures/vacation_2025
 
 ```
 jotta-archiver/
-├── main.go                 # Entry point and CLI parsing
+├── main.go                 # Entry point, CLI parsing, orchestration
 ├── config/
 │   └── config.go          # YAML config loading
 ├── wordgen/
 │   └── wordgen.go         # Random archive name generation
+├── preprocess/
+│   └── preprocess.go      # Format splitting and extension renaming
 ├── archive/
 │   └── archive.go         # Jotta-cli command execution
 ├── tui/

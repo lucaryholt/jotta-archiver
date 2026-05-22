@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/luca/jotta-archiver/archive"
 	"github.com/luca/jotta-archiver/config"
+	"github.com/luca/jotta-archiver/preprocess"
 	"github.com/luca/jotta-archiver/tui"
 	"github.com/luca/jotta-archiver/wordgen"
 )
@@ -66,17 +68,32 @@ func run() error {
 	// Generate archive name
 	archiveName := wordgen.Generate()
 
-	// Start TUI
-	uploadID, debugMode, err := tui.Run(cfg.Presets, archiveName, absPath)
+	// Collect user selections via TUI
+	result, err := tui.Run(cfg.Presets, archiveName, absPath)
 	if err != nil {
 		return fmt.Errorf("TUI error: %w", err)
 	}
+	if result.Cancelled {
+		return nil
+	}
 
-	// If we got an upload ID, launch jotta-cli observe
-	if uploadID != "" {
-		if err := archive.Observe(uploadID, debugMode); err != nil {
-			return fmt.Errorf("failed to observe upload: %w", err)
-		}
+	// Preprocess: reorganize/rename files into a temp dir if needed
+	uploadDir, cleanup, err := preprocess.Prepare(absPath, result.SplitByFormat, cfg.ExtensionRenames)
+	if err != nil {
+		return fmt.Errorf("failed to prepare upload directory: %w", err)
+	}
+	defer cleanup()
+
+	// Start archive
+	ctx := context.Background()
+	uploadID, err := archive.Archive(ctx, uploadDir, result.RemotePath, result.ArchiveName, result.DebugMode)
+	if err != nil {
+		return fmt.Errorf("failed to start archive: %w", err)
+	}
+
+	// Monitor upload progress
+	if err := archive.Observe(uploadID, result.DebugMode); err != nil {
+		return fmt.Errorf("failed to observe upload: %w", err)
 	}
 
 	return nil

@@ -10,23 +10,29 @@ import (
 
 // Preset represents a configured archiving preset
 type Preset struct {
-	Name   string `yaml:"name"`
-	Remote string `yaml:"remote"`
+	Name          string `yaml:"name"`
+	Remote        string `yaml:"remote"`
+	SplitByFormat bool   `yaml:"split_by_format,omitempty"`
 }
 
 // Config represents the application configuration
 type Config struct {
-	Presets []Preset `yaml:"presets"`
+	Presets          []Preset          `yaml:"presets"`
+	ExtensionRenames map[string]string `yaml:"extension_renames,omitempty"`
 }
 
 // DefaultConfigContent is the default configuration if none exists
 const DefaultConfigContent = `presets:
   - name: "Camera Pictures"
     remote: "/media/pictures/camera_pictures"
+    split_by_format: true
   - name: "Documents"
     remote: "/media/documents"
   - name: "Music"
     remote: "/media/music/archives"
+
+extension_renames:
+  HIF: HEIF
 `
 
 // GetConfigPath returns the path to the config file

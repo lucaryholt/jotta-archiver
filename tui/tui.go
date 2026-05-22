@@ -1,14 +1,12 @@
 package tui
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/luca/jotta-archiver/archive"
 	"github.com/luca/jotta-archiver/config"
 )
 
@@ -31,9 +29,8 @@ type Model struct {
 	remoteInput   textinput.Model
 	folderPath    string
 	customRemote  string
-	uploadID      string
-	ctx           context.Context
-	cancel        context.CancelFunc
+	remotePath    string
+	splitByFormat bool
 	err           error
 	quitting      bool
 	debugMode     bool
@@ -53,8 +50,6 @@ func New(presets []config.Preset, initialName, folderPath string) Model {
 	ri.CharLimit = 200
 	ri.Width = 50
 
-	ctx, cancel := context.WithCancel(context.Background())
-
 	return Model{
 		screen:        ScreenPresetSelection,
 		presets:       presets,
@@ -63,8 +58,6 @@ func New(presets []config.Preset, initialName, folderPath string) Model {
 		textInput:     ti,
 		remoteInput:   ri,
 		folderPath:    folderPath,
-		ctx:           ctx,
-		cancel:        cancel,
 	}
 }
 
@@ -97,7 +90,6 @@ func (m Model) updatePresetSelection(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "ctrl+c", "q":
 		m.quitting = true
-		m.cancel()
 		return m, tea.Quit
 
 	case "d":
@@ -132,7 +124,6 @@ func (m Model) updateCustomRemote(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "ctrl+c":
 		m.quitting = true
-		m.cancel()
 		return m, tea.Quit
 
 	case "esc":
@@ -158,7 +149,6 @@ func (m Model) updateNameEditing(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "ctrl+c":
 		m.quitting = true
-		m.cancel()
 		return m, tea.Quit
 
 	case "d":
@@ -177,27 +167,17 @@ func (m Model) updateNameEditing(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "enter":
 		m.archiveName = m.textInput.Value()
 		if m.archiveName == "" {
-			return m, nil // Don't proceed with empty name
+			return m, nil
 		}
-		
-		// Determine remote path
-		var remotePath string
+
 		if m.customRemote != "" {
-			remotePath = m.customRemote
+			m.remotePath = m.customRemote
 		} else {
 			preset := m.presets[m.selectedIndex]
-			remotePath = preset.Remote
+			m.remotePath = preset.Remote
+			m.splitByFormat = preset.SplitByFormat
 		}
-		
-		// Start archiving
-		uploadID, err := archive.Archive(m.ctx, m.folderPath, remotePath, m.archiveName, m.debugMode)
-		if err != nil {
-			m.err = err
-			return m, tea.Quit
-		}
-		
-		// Store upload ID and quit to launch observe
-		m.uploadID = uploadID
+
 		m.quitting = true
 		return m, tea.Quit
 	}
@@ -328,20 +308,40 @@ func (m Model) viewNameEditing() string {
 	return b.String()
 }
 
-// Run starts the TUI application and returns the upload ID (if upload started) and debug mode
-func Run(presets []config.Preset, initialName, folderPath string) (string, bool, error) {
+// Result holds the user's selections from the TUI.
+type Result struct {
+	RemotePath    string
+	ArchiveName   string
+	SplitByFormat bool
+	DebugMode     bool
+	Cancelled     bool
+}
+
+// Run starts the TUI application and returns the user's selections.
+func Run(presets []config.Preset, initialName, folderPath string) (Result, error) {
 	m := New(presets, initialName, folderPath)
 	p := tea.NewProgram(m)
 	finalModel, err := p.Run()
 	if err != nil {
-		return "", false, err
+		return Result{}, err
 	}
-	
-	// Extract upload ID and debug mode from final model
-	if fm, ok := finalModel.(Model); ok {
-		return fm.uploadID, fm.debugMode, nil
+
+	fm, ok := finalModel.(Model)
+	if !ok {
+		return Result{Cancelled: true}, nil
 	}
-	
-	return "", false, nil
+	if fm.err != nil {
+		return Result{}, fm.err
+	}
+	if fm.remotePath == "" {
+		return Result{Cancelled: true}, nil
+	}
+
+	return Result{
+		RemotePath:    fm.remotePath,
+		ArchiveName:   fm.archiveName,
+		SplitByFormat: fm.splitByFormat,
+		DebugMode:     fm.debugMode,
+	}, nil
 }
 
